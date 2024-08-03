@@ -1,53 +1,88 @@
-_G.AutoFarm = true
-_G.Area = 'Mystic Mine'
+getgenv().config = {
+    autoEgg = true,
+    targetEgg = "Arcade Egg 5",
+}
 
- Client = require(game.ReplicatedStorage.Library.Client)
-local Library = require(game.ReplicatedStorage.Library)
-local Orbs = getsenv(game.Players.LocalPlayer.PlayerScripts.Scripts.Game.Orbs)
+repeat task.wait() until game:IsLoaded()
+repeat task.wait() until game.PlaceId ~= nil
+repeat task.wait() until game:GetService("Players").LocalPlayer
+local Player = game.Players.LocalPlayer
+repeat task.wait() until not game.Players.LocalPlayer.PlayerGui:FindFirstChild("__INTRO")
+local HRP = Player.Character.HumanoidRootPart
+local RepStor = game:GetService("ReplicatedStorage")
+local Library = require(RepStor.Library)
+local Active = workspace.__THINGS.__INSTANCE_CONTAINER.Active
 
-debug.setupvalue(Client.Network.Invoke, 1, function() return true end)
-debug.setupvalue(Client.Network.Fire, 1, function() return true end)
+--[[
+	min = closest claw position to the "Collection" box
+	max = closest claw position to the opposite glass wall
+	def = default claw position
+]]
 
-function GetCoins(Area)
-    local Coins = {}
-    for i,v in next, Client.Network.Invoke('Get Coins') do 
-        if v.a == Area then 
-            Coins[i] = v
-        end 
-    end 
-    return Coins
-end 
+local xRange = {min = 183, max = 212, def = 164}
+local zRange = {min = -1947, max = -1918, def = -1968}
 
-function GetPets()
-    return Client.PetCmds.GetEquipped() 
-end 
+function floorVector3(v3) return Vector3.new(math.floor(v3.X), math.floor(v3.Y), math.floor(v3.Z)) end
 
-for i,v in pairs(workspace.__THINGS.Orbs:GetChildren()) do 
-    Orbs.Collect(v)
-end 
+while game.PlaceId and config.autoEgg do task.wait(1)
+    if Active:FindFirstChild("ClawMachine") then
+		local clawHolder = Active.ClawMachine.Claws.Claw.Holder
+		local targetEgg = Active.ClawMachine.Items:FindFirstChild(config.targetEgg)
+        if targetEgg then
+			local eggPos = Vector2.new(math.floor(targetEgg:GetPivot().X), math.floor(targetEgg:GetPivot().Z))
+			if eggPos.X < xRange.min and eggPos.Y < zRange.min
+			or eggPos.Y < zRange.min and eggPos.X < xRange.min -- these checks cuz eggs too close to walls can't get
+			or eggPos.X > xRange.max or eggPos.Y > zRange.max
+			or eggPos.X < xRange.def or eggPos.Y < zRange.def then
+				print(`bad egg die in fire`) targetEgg:Destroy() -- destroy if not within "get"able parameters
+			else
+				print(`{targetEgg.Name} | {eggPos} : is Good`)
+				if Player.PlayerGui._INSTANCES.ClawMachine.Enabled then -- if game active then get egg
 
-workspace.__THINGS.Orbs.ChildAdded:Connect(function(v)
-    Orbs.Collect(v)
-end)
+					if clawHolder.Position.X < eggPos.X then -- self explan
+						print(`{floorVector3(clawHolder.Position)} | {eggPos} : Need to move Claw Forward`)
+						Library.Network.Fire("Instancing_FireCustomFromClient", "ClawMachine", "Claw: Direction", "Forward")
+						repeat task.wait(.01) until math.floor(clawHolder.Position.X) == eggPos.X
+						Library.Network.Fire("Instancing_FireCustomFromClient", "ClawMachine", "Claw: Direction")
+					end
 
-while true do 
-    if _G.AutoFarm then
-        local Pets = GetPets()
-        local Coins = GetCoins(_G.Area or 'Town')
-        for i,v in next, Coins do
-            if workspace.__THINGS.Coins:FindFirstChild(i) and _G.AutoFarm then 
-                for _,Pet in next, Pets do 
-                    spawn(function()
-                        if _G.AutoFarm then
-                            Client.Network.Invoke('Join Coin', i, {Pet.uid})
-                            Client.Network.Fire('Farm Coin', i, Pet.uid)
-                        end
-                    end)
-                end 
-            end 
-            repeat task.wait() until not workspace.__THINGS.Coins:FindFirstChild(i)
-        end 
-        task.wait()
-    end
-    task.wait()
-end 
+					if clawHolder.Position.Z < eggPos.Y then -- self explan
+						print(`{floorVector3(clawHolder.Position)} | {eggPos} : Need to move Claw to the Right`)
+						Library.Network.Fire("Instancing_FireCustomFromClient", "ClawMachine", "Claw: Direction", "Right")
+						repeat task.wait(.01) until math.floor(clawHolder.Position.Z) == eggPos.Y
+						Library.Network.Fire("Instancing_FireCustomFromClient", "ClawMachine", "Claw: Direction")
+					end
+
+					task.wait(1) Library.Network.Fire("Instancing_FireCustomFromClient", "ClawMachine", "Claw: Go") print("Resetting")
+					repeat task.wait() until math.floor(clawHolder.Position.X) == xRange.def and math.floor(clawHolder.Position.Z) == zRange.def
+					task.wait(1.5) print("Finished")
+				else -- if game not active then activate game 
+					Library.Network.Fire("Instancing_FireCustomFromClient", "ClawMachine", "Claw: Request Play")
+				end
+			end
+		else
+			if game.PlaceId ~= 8737899170 then -- they patched staying in VIP server, so just reg serverhop now
+                while game.PlaceId do Library.Network.Invoke("World1Teleport") task.wait(1) end
+            elseif game.PlaceId == 8737899170 then
+                while game.PlaceId do Library.Network.Invoke("World2Teleport") task.wait(1) end
+				--[[ old method for staying in vip servers ; patched now tho
+
+				if Active:FindFirstChild("ClawMachine") then
+                    while Active:FindFirstChild("ClawMachine") do
+                        firetouchinterest(HRP, workspace.__THINGS.Instances.ClawMachine.Teleports.Leave, 1) task.wait(.1)
+                        firetouchinterest(HRP, workspace.__THINGS.Instances.ClawMachine.Teleports.Leave, 0) task.wait(1)
+                    end
+                end
+                workspace.Gravity = 0 Player.Character.PrimaryPart.CFrame = CFrame.new(-64, 202, 6728)
+                while game.PlaceId do task.wait(1) Library.Network.Fire("RequestTechRocket") end
+
+				]]
+            end
+		end
+	else -- if not in claw area; enter claw area
+		firetouchinterest(HRP, workspace.__THINGS.Instances.ClawMachine.Teleports.Enter, 1) task.wait(.1)
+        firetouchinterest(HRP, workspace.__THINGS.Instances.ClawMachine.Teleports.Enter, 0)
+        repeat task.wait(1) until Active:FindFirstChild("ClawMachine")
+        repeat task.wait(1) until #Active.ClawMachine:FindFirstChild("Items"):GetChildren() >= 10
+	end
+end
